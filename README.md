@@ -10,7 +10,6 @@ by default, imagen just creates a sample 256x192 gray image with a white text on
 - background colors:
   - solid color (e.g. 'blue', or '#0000FF')
   - random solid color
-  - random solid colors from a given set of colors
   - pixelated / tiled with multiple colors (e.g. black/white tiles)
   - color gradients with 2 or multiple colors and angles
 - configurable text
