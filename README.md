@@ -4,7 +4,7 @@ imagen is a small image creation utility to create placeholder images. It can ei
 
 ## Supported image configurations
 
-by default, imagen just creates a sample 256x192 gray image with a white text on it (drawing the actual size). But imagen can produce indivudualized images. The following parameters are supported:
+by default, imagen just creates a sample 256x192 gray image with a white text on it (drawing the actual size). But imagen can produce individualized images. The following parameters are supported:
 
 - image size (width, height)
 - background colors:
@@ -77,6 +77,10 @@ You can provide multiple color parameters, from different and the same types. If
 `--text-size=[size]`: The text size in pt
 
 `--text-color=[color]`: The text color (e.g. `white` or `ffffff`). Note: if a text color is specified in a color parameter (e.g. `-c blue:t:red`), that takes precedence over this default text color.
+
+`--text-angle=[angle]`: The text angle in degrees (e.g. `45` for 45-degree rotation)
+
+`--format=[format]`: The output format. Supported formats are `png` and `jpeg` (default: `png`)
 
 `--nr=[nr]`, `-r [nr]`: Number of runs: a "Run" may create one or more images, according to the color parameters above:
 This is useful if you have random colors, and want to generate multiple images from the same color definitions. The image number can be used in the filename template: the `{nr}` placeholder will be replaced with the actual image number.
@@ -161,15 +165,18 @@ This URL generates randomly either:
 
 #### Text
 
-The text parameter starts with `t:`, followed by a (quoted) text, then an optional size and color definition:
+The text parameter starts with `t:`, followed by a (quoted) text, then optional size, color, and angle definitions:
 
-`t:"Text to output",s:26,c:yellow`
+`t:"Text to output",s:26,c:yellow,a:45`
 
-while size (s) and color (c) are optional: The size defaults to 12pt, while the color defaults to white.
+The optional parameters are:
+- `s:[size]` - text size in pt (defaults to 12pt)
+- `c:[color]` - text color (defaults to white)
+- `a:[angle]` - text angle in degrees (defaults to 0)
 
 The text supports the placeholders `{w}` and `{h}`, which are replaced with the image's width and height values:
 
-`t:"Image: {w}x{h}",s:26,c:yellow`
+`t:"Image: {w}x{h}",s:26,c:yellow,a:45`
 
 #### Border
 
@@ -197,7 +204,7 @@ The `f:[format]` parameters defines the image output format. Supported formats a
 - Image size: 500x300, red to blue gradient, angled 120 degrees, white text
   `http://[imagen-url]/500x300/g:red,blue:120:t:white`
 - Image size: 500x300, either a solid green color or tiles of blue/white, 10px wide, and a black 10px border. A white text, 30pt, states "Hello, World 500x300". The color mode is chosen randomly:
-  `http://[imagen-url]/500x300/c:00ff00/t:white,blue:10/b:10,black/t:"Hello, World {w}x{h},s:30,c:white"`
+  `http://[imagen-url]/500x300/c:00ff00/t:white,blue:10/b:10,black/t:"Hello, World {w}x{h}",s:30,c:white`
 
 
 ## Supported color values

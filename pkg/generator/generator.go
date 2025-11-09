@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
+	stdDraw "image/draw"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -15,9 +15,11 @@ import (
 	"runtime"
 	"strings"
 
+	"golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/f64"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -86,7 +88,7 @@ func (g *Generator) drawBackground(img *image.RGBA) error {
 // drawSolidBackground fills the image with a solid color
 func (g *Generator) drawSolidBackground(img *image.RGBA) {
 	c := g.config.Colors[0]
-	draw.Draw(img, img.Bounds(), &image.Uniform{c}, image.Point{}, draw.Src)
+	stdDraw.Draw(img, img.Bounds(), &image.Uniform{c}, image.Point{}, stdDraw.Src)
 }
 
 // drawTiledBackground draws a tiled/pixelated background
@@ -115,7 +117,7 @@ func (g *Generator) drawTiledBackground(img *image.RGBA, random bool) {
 
 			// Draw tile
 			rect := image.Rect(x, y, min(x+tileSize, g.config.Width), min(y+tileSize, g.config.Height))
-			draw.Draw(img, rect, &image.Uniform{c}, image.Point{}, draw.Src)
+			stdDraw.Draw(img, rect, &image.Uniform{c}, image.Point{}, stdDraw.Src)
 		}
 	}
 }
@@ -201,14 +203,14 @@ func (g *Generator) drawBorder(img *image.RGBA) {
 
 	// Top and bottom borders
 	for i := 0; i < width; i++ {
-		draw.Draw(img, image.Rect(0, i, bounds.Max.X, i+1), &image.Uniform{borderColor}, image.Point{}, draw.Src)
-		draw.Draw(img, image.Rect(0, bounds.Max.Y-i-1, bounds.Max.X, bounds.Max.Y-i), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+		stdDraw.Draw(img, image.Rect(0, i, bounds.Max.X, i+1), &image.Uniform{borderColor}, image.Point{}, stdDraw.Src)
+		stdDraw.Draw(img, image.Rect(0, bounds.Max.Y-i-1, bounds.Max.X, bounds.Max.Y-i), &image.Uniform{borderColor}, image.Point{}, stdDraw.Src)
 	}
 
 	// Left and right borders
 	for i := 0; i < width; i++ {
-		draw.Draw(img, image.Rect(i, 0, i+1, bounds.Max.Y), &image.Uniform{borderColor}, image.Point{}, draw.Src)
-		draw.Draw(img, image.Rect(bounds.Max.X-i-1, 0, bounds.Max.X-i, bounds.Max.Y), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+		stdDraw.Draw(img, image.Rect(i, 0, i+1, bounds.Max.Y), &image.Uniform{borderColor}, image.Point{}, stdDraw.Src)
+		stdDraw.Draw(img, image.Rect(bounds.Max.X-i-1, 0, bounds.Max.X-i, bounds.Max.Y), &image.Uniform{borderColor}, image.Point{}, stdDraw.Src)
 	}
 }
 
@@ -231,6 +233,18 @@ func (g *Generator) drawText(img *image.RGBA) {
 	// Try to load TrueType font, fall back to basicfont
 	face := g.loadFont()
 
+	// If no rotation, draw directly
+	if g.config.TextAngle == 0 {
+		g.drawTextDirect(img, text, textColor, borderColor, face)
+		return
+	}
+
+	// For rotated text, draw to a temporary image and transform it
+	g.drawTextRotated(img, text, textColor, borderColor, face)
+}
+
+// drawTextDirect draws text directly without rotation
+func (g *Generator) drawTextDirect(img *image.RGBA, text string, textColor, borderColor color.Color, face font.Face) {
 	// Measure text
 	drawer := &font.Drawer{
 		Dst:  img,
@@ -275,6 +289,92 @@ func (g *Generator) drawText(img *image.RGBA) {
 	// Draw the main text on top
 	drawer.Dot = basePoint
 	drawer.DrawString(text)
+}
+
+// drawTextRotated draws rotated text using image transformation
+func (g *Generator) drawTextRotated(img *image.RGBA, text string, textColor, borderColor color.Color, face font.Face) {
+	// Measure text to determine temporary image size
+	drawer := &font.Drawer{
+		Dst:  nil,
+		Src:  image.NewUniform(textColor),
+		Face: face,
+	}
+
+	bounds, _ := drawer.BoundString(text)
+	textWidth := (bounds.Max.X - bounds.Min.X).Ceil()
+	textHeight := (bounds.Max.Y - bounds.Min.Y).Ceil()
+
+	// Create a temporary image large enough to hold the rotated text
+	// Use a generous size to avoid clipping
+	margin := 20
+	tempSize := int(math.Max(float64(textWidth), float64(textHeight))) + margin*2
+	tempImg := image.NewRGBA(image.Rect(0, 0, tempSize, tempSize))
+
+	// Draw text centered on temp image
+	tempDrawer := &font.Drawer{
+		Dst:  tempImg,
+		Src:  image.NewUniform(textColor),
+		Face: face,
+	}
+
+	// Position text at center of temp image
+	tempX := (tempSize - textWidth) / 2
+	tempY := (tempSize + textHeight) / 2
+
+	basePoint := fixed.Point26_6{
+		X: fixed.I(tempX),
+		Y: fixed.I(tempY),
+	}
+
+	// Draw text border
+	borderOffsets := []struct{ dx, dy int }{
+		{-1, -1}, {0, -1}, {1, -1},
+		{-1, 0}, {1, 0},
+		{-1, 1}, {0, 1}, {1, 1},
+	}
+
+	borderDrawer := &font.Drawer{
+		Dst:  tempImg,
+		Src:  image.NewUniform(borderColor),
+		Face: face,
+	}
+
+	for _, offset := range borderOffsets {
+		borderDrawer.Dot = fixed.Point26_6{
+			X: basePoint.X + fixed.I(offset.dx),
+			Y: basePoint.Y + fixed.I(offset.dy),
+		}
+		borderDrawer.DrawString(text)
+	}
+
+	// Draw main text
+	tempDrawer.Dot = basePoint
+	tempDrawer.DrawString(text)
+
+	// Create rotation transformation matrix
+	angleRad := g.config.TextAngle * math.Pi / 180.0
+	cos := math.Cos(angleRad)
+	sin := math.Sin(angleRad)
+
+	// Center of destination image
+	cx := float64(g.config.Width) / 2
+	cy := float64(g.config.Height) / 2
+
+	// Center of temp image
+	tcx := float64(tempSize) / 2
+	tcy := float64(tempSize) / 2
+
+	// Create affine transformation:
+	// 1. Translate temp image center to origin
+	// 2. Rotate around origin
+	// 3. Translate to destination center
+	transform := f64.Aff3{
+		cos, -sin, cx - cos*tcx + sin*tcy,
+		sin, cos, cy - sin*tcx - cos*tcy,
+	}
+
+	// Apply transformation using BiLinear interpolation for better quality
+	draw.BiLinear.Transform(img, transform, tempImg, tempImg.Bounds(), draw.Over, nil)
 }
 
 // invertColor returns the inverted (complementary) color
