@@ -36,7 +36,7 @@ imagen serve [parameters]
 
 ### generate parameters
 
-- `--size=[WxH]`, `-s [WxH]: width/height. defaults to 256x192. Can be given multiple times to generate multiple images (see `--filename` below)
+- `--size=[WxH]`, `-s [WxH]`: width/height. defaults to 256x192. Can be given multiple times to generate multiple images (see `--filename` below)
 - `--color-mode=[mode]`, `-m [mode]`: The color mode. Valid modes are: `solid`, `tiled`, `gradient`, `noise`. The difference of "tiled" and "noise" is the randomness: "tiled" mode generates tile colors in order, while "noise" produces random tiles.
 - `--color=[color]`, `-c [color]`: single color when using "solid". Can be a name (e.g. `blue`), an RGB code (e.g. `A0F34B`), `random` for a complete random color, or a comma-separated list of the values before: This list is used when using the `--nr` parameter to generate multiple images: It then randomly selects one entry from the list per image. This parameter can be repeated for defining multiple colors for the other modes.
 - `--border-width=[nr]` `-b [width]`: The border with in pixels
@@ -70,15 +70,101 @@ All parameters can be defined in the URL. The first parameter is always the size
 while the following parameters can be placed in any order: They are prefixed with a single
 character to indicate the parameter type:
 
+rough scheme:
+
 ```
-http://[imagen-url]/[size]/c:[color-config]/t:[text]/f:[format]/b:[border]
+http://[imagen-url]/[size]/[c|g|t|n]:[color-config]:[text-color]/t:[text]/f:[format]/b:[border]
 ```
+
+#### size
+
+The first parameter is the size of the image. It is a pair of width x height number:
+
+```
+http://[imagen-url]/320x200
+```
+
+#### background definition
+
+A background definition begins with a single char, which defines the mode, then a color definition. The URL knows the following color modes:
+
+- `c:[color]`: single color background, e.g. `c:blue` creates a blue background. Some examples:
+	- `c:aliceblue`: single background color, html name aliceblue
+	- `c:ff0000`: single background color, red in hex code
+	- `c:random`: single background color, random color from the RGB spectrum
+- `g:[color1],[color2]:[angle]`: gradient of two colors and a gradient angle:
+  - `g:red,0000ff`: Gradient background from red to blue (hex), top to bottom (angle 0)
+  - `g:0000ff,random,45`: Gradient background from blue (hex) to a random color, 45 degrees tilted
+- `t:[color1],[color2][...[color-n]]:[tile-size]`: colored tiles with n colors. At least 2 colors must be defined, then colored tiles of the given size are created. Colors are applied in order.
+  - `t:red,green,blue`: Tiles alternating from red to green to blue, tile size 36px by default
+  - `t:red,ffffff:10`: Tiles alternating from red to white, tile size 10px
+- `n:[color1],[color2][...[color-n]]:[tile-size]`: like colored tiles with n colors, but colors are applied randomly (like noise, so the 'n' stands for noise). At least 2 colors must be defined, then colored tiles of the given size are created. Colors are applied randomly.
+  - `n:red,green,blue`: Tiles randomly colored from red to green to blue, tile size 36px by default
+  - `n:red,ffffff:10`: Tiles randomly colored from red to white, tile size 10px
+
+In addition, all parameter forms also take an optional text color information with `:t:[color]`, to set the text color. Examples:
+
+- `c:aliceblue:t:red` creates a single-colored aliceblue background with red font color
+- `g:0000ff,random,45:t:red`: Gradient background from blue (hex) to a random color, 45 degrees tilted, with red text color
+- `t:red,ffffff:10,t:blue`: Tiles alternating from red to white, tile size 10px, with red text
+- `n:red,ffffff:10,t:blue`: Noise Tiles from red to white, tile size 10px, with red text
+
+Color parameters can be defined multiple times: If multiple color parameters are given in the URL,
+each requested image choses one color definition randomly.
 
 **Example:**
 
-http://[imagen-url]/400x300/c:blue/t:"hello, world",s:26,c:yellow/f:png/b:5,ffffff
+```
+http://[imagen-url]/400x300/c:blue/g:red,green/t:ff0000,aliceblue
+```
 
-This will create a 400x300px solid blue image with a yellow "hello world" text in size 26pt as PNG image. It has a 5 pixel white border.
+This URL generates randomly either:
+
+- a blue solid background
+- a gradient from red to green
+- tiles with red and aliceblue colors
+
+
+#### Text
+
+The text parameter starts with `t:`, followed by a (quoted) text, then an optional size and color definition:
+
+`t:"Text to output",s:26,c:yellow`
+
+while size (s) and color (c) are optional: The size defaults to 12pt, while the color defaults to white.
+
+The text supports the placeholders `{w}` and `{h}`, which are replaced with the image's width and height values:
+
+`t:"Image: {w}x{h}",s:26,c:yellow`
+
+#### Border
+
+The `b:size,color`  parameter defines a border around the image, e.g.
+
+`b:5,ff0000` creates a 5 pixel red border.
+
+**Examples:**
+
+- Default image: 256x192, black background, white text stating "256x192":
+  `http://[imagen-url]/`
+- Image size: 500x300, black background, white text stating "500x300":
+  `http://[imagen-url]/500x300`
+- Image size: 500x300, red background with blue text:
+  `http://[imagen-url]/500x300/c:red:t:blue`
+- Image size: 500x300, red to blue gradient, white text
+  `http://[imagen-url]/500x300/g:red,blue:t:white`
+- Image size: 500x300, red to blue gradient, angled 120 degrees, white text
+  `http://[imagen-url]/500x300/g:red,blue,120:t:white`
+- Image size: 500x300, either a solid green color or tiles of blue/white, 10px wide, and a black 10px border. A white text, 30pt, states "Hello, World 500x300". The color mode is chosen randomly:
+  `http://[imagen-url]/500x300/c:00ff00/t:white,blue:10/b:10,black/t:"Hello, World {w}x{h},s:30,c:white"`
+
+## Supported color values
+
+the following color values are supported:
+
+- RGB hex form, e.g. `ff33a6`, with red = `ff`, green = `33` and blue = `a6`
+- supported HTML color names like `blue`, `darkbrown`, `aliceblue`, as defined by the W3C (<https://www.w3schools.com/colors/colors_names.asp>)
+- the special value `random`, which just returns a random color from the RGB spectrum
 
 
 ## Software Architecture

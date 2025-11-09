@@ -8,12 +8,16 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
+	"runtime"
 	"strings"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -218,9 +222,8 @@ func (g *Generator) drawText(img *image.RGBA) {
 		textColor = *g.config.TextColor
 	}
 
-	// Use basic font from standard library
-	// Note: Text rotation is not supported with basicfont
-	face := basicfont.Face7x13
+	// Try to load TrueType font, fall back to basicfont
+	face := g.loadFont()
 
 	// Measure text
 	drawer := &font.Drawer{
@@ -243,6 +246,96 @@ func (g *Generator) drawText(img *image.RGBA) {
 		Y: fixed.I(y),
 	}
 	drawer.DrawString(text)
+}
+
+// loadFont attempts to load a TrueType font from the system, falls back to basicfont
+func (g *Generator) loadFont() font.Face {
+	// Try to load system TrueType font
+	fontPaths := getSystemFontPaths()
+
+	for _, fontPath := range fontPaths {
+		if face := tryLoadTTF(fontPath, g.config.TextSize); face != nil {
+			return face
+		}
+	}
+
+	// Fall back to basicfont
+	return basicfont.Face7x13
+}
+
+// getSystemFontPaths returns common system font paths based on OS
+func getSystemFontPaths() []string {
+	switch runtime.GOOS {
+	case "darwin": // macOS
+		return []string{
+			"/System/Library/Fonts/Helvetica.ttc",
+			"/System/Library/Fonts/SFNSText.ttf",
+			"/System/Library/Fonts/SFNS.ttf",
+			"/Library/Fonts/Arial.ttf",
+			"/System/Library/Fonts/Supplemental/Arial.ttf",
+		}
+	case "linux":
+		return []string{
+			"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+			"/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+			"/usr/share/fonts/TTF/DejaVuSans.ttf",
+			"/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+		}
+	case "windows":
+		return []string{
+			"C:\\Windows\\Fonts\\arial.ttf",
+			"C:\\Windows\\Fonts\\calibri.ttf",
+		}
+	default:
+		return []string{}
+	}
+}
+
+// tryLoadTTF attempts to load a TrueType font from the given path
+func tryLoadTTF(fontPath string, size float64) font.Face {
+	// Check if file exists
+	if _, err := os.Stat(fontPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	// Read font file
+	fontData, err := ioutil.ReadFile(fontPath)
+	if err != nil {
+		return nil
+	}
+
+	// Parse font
+	// Try as TrueType collection first (for .ttc files)
+	f, err := opentype.ParseCollection(fontData)
+	if err == nil && f.NumFonts() > 0 {
+		// Use first font in collection
+		font, err := f.Font(0)
+		if err == nil {
+			face, err := opentype.NewFace(font, &opentype.FaceOptions{
+				Size: size,
+				DPI:  72,
+			})
+			if err == nil {
+				return face
+			}
+		}
+	}
+
+	// Try as single TrueType font
+	ttf, err := opentype.Parse(fontData)
+	if err != nil {
+		return nil
+	}
+
+	face, err := opentype.NewFace(ttf, &opentype.FaceOptions{
+		Size: size,
+		DPI:  72,
+	})
+	if err != nil {
+		return nil
+	}
+
+	return face
 }
 
 func min(a, b int) int {
