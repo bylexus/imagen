@@ -3,7 +3,8 @@
     "allow": [
       "Bash(curl:*)",
       "Bash(md5sum:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(./imagen generate:*)"
     ],
     "deny": [],
     "ask": []

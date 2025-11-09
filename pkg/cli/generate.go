@@ -11,20 +11,28 @@ import (
 	"github.com/bylexus/imagen/pkg/generator"
 )
 
+// ColorDefinition holds a parsed color parameter
+type ColorDefinition struct {
+	Mode         generator.ColorMode // solid, gradient, tiled, noise
+	Colors       []color.Color
+	ColorStrings []string // original color strings for regenerating random colors
+	Angle        float64  // for gradient
+	TileSize     int      // for tiled/noise
+	TextColor    *color.Color // optional text color override
+}
+
 // GenerateCommand handles the 'generate' command
 type GenerateCommand struct {
-	sizes        []string
-	colorModes   []string
-	colors       []string
-	borderWidth  int
-	borderColor  string
-	gradientAngle float64
-	tileSize     int
-	text         string
-	textSize     float64
-	textColor    string
-	filename     string
-	format       string
+	sizes           []string
+	colorDefs       []ColorDefinition
+	border          string
+	text            string
+	textSize        float64
+	textColor       string
+	textAngle       float64
+	filename        string
+	format          string
+	rounds          int
 }
 
 // Execute runs the generate command
@@ -41,46 +49,96 @@ func (c *GenerateCommand) Execute(args []string) error {
 		return nil
 	})
 
-	// Color mode flag (can be repeated)
-	fs.Func("color-mode", "Color mode: solid, tiled, gradient, noise (can be repeated)", func(s string) error {
-		c.colorModes = append(c.colorModes, s)
+	// Color flags (can be repeated) - solid color
+	fs.Func("color", "Solid color: color[:t:textcolor]", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeSolid)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
 		return nil
 	})
-	fs.Func("m", "Color mode (shorthand)", func(s string) error {
-		c.colorModes = append(c.colorModes, s)
+	fs.Func("c", "Solid color (shorthand)", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeSolid)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
 		return nil
 	})
 
-	// Color flag (can be repeated)
-	fs.Func("color", "Color value (can be repeated)", func(s string) error {
-		c.colors = append(c.colors, s)
+	// Gradient flags (can be repeated)
+	fs.Func("gradient", "Gradient: color1,color2[,...][:angle][:t:textcolor]", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeGradient)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
 		return nil
 	})
-	fs.Func("c", "Color value (shorthand)", func(s string) error {
-		c.colors = append(c.colors, s)
+	fs.Func("g", "Gradient (shorthand)", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeGradient)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
 		return nil
 	})
 
-	fs.IntVar(&c.borderWidth, "border-width", 0, "Border width in pixels")
-	fs.IntVar(&c.borderWidth, "b", 0, "Border width (shorthand)")
-	fs.StringVar(&c.borderColor, "border-color", "black", "Border color")
+	// Tiles flags (can be repeated)
+	fs.Func("tiles", "Tiles: color1,color2[,...][:tilesize][:t:textcolor]", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeTiled)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
+		return nil
+	})
+	fs.Func("t", "Tiles (shorthand)", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeTiled)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
+		return nil
+	})
 
-	fs.Float64Var(&c.gradientAngle, "gradient-angle", 0, "Gradient angle in degrees")
-	fs.Float64Var(&c.gradientAngle, "a", 0, "Gradient angle (shorthand)")
+	// Noise flags (can be repeated)
+	fs.Func("noise", "Noise: color1,color2[,...][:tilesize][:t:textcolor]", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeNoise)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
+		return nil
+	})
+	fs.Func("n", "Noise (shorthand)", func(s string) error {
+		def, err := parseColorParameter(s, generator.ColorModeNoise)
+		if err != nil {
+			return err
+		}
+		c.colorDefs = append(c.colorDefs, def)
+		return nil
+	})
 
-	fs.IntVar(&c.tileSize, "tile-size", 16, "Tile size in pixels")
-	fs.IntVar(&c.tileSize, "ts", 16, "Tile size (shorthand)")
+	// Border parameter (combined width and color)
+	fs.StringVar(&c.border, "border", "", "Border: width,color")
+	fs.StringVar(&c.border, "b", "", "Border (shorthand)")
 
+	// Text parameters
 	fs.StringVar(&c.text, "text", "{w}x{h}", "Text to display")
-	fs.StringVar(&c.text, "t", "{w}x{h}", "Text to display (shorthand)")
-
 	fs.Float64Var(&c.textSize, "text-size", 20, "Text size in pt")
-	fs.StringVar(&c.textColor, "text-color", "", "Text color")
+	fs.StringVar(&c.textColor, "text-color", "", "Default text color")
+	fs.Float64Var(&c.textAngle, "text-angle", 0, "Text angle in degrees")
 
+	// Output parameters
 	fs.StringVar(&c.filename, "filename", "image.png", "Output filename")
 	fs.StringVar(&c.filename, "f", "image.png", "Output filename (shorthand)")
-
 	fs.StringVar(&c.format, "format", "png", "Output format (png, jpeg)")
+
+	// Rounds parameter
+	fs.IntVar(&c.rounds, "nr", 1, "Number of runs")
+	fs.IntVar(&c.rounds, "r", 1, "Number of runs (shorthand)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -90,107 +148,239 @@ func (c *GenerateCommand) Execute(args []string) error {
 	if len(c.sizes) == 0 {
 		c.sizes = []string{"256x192"}
 	}
-	if len(c.colorModes) == 0 {
-		c.colorModes = []string{"solid"}
-	}
-	if len(c.colors) == 0 {
-		c.colors = []string{"gray"}
-	}
-
-	// Generate images for each combination of size and color mode
-	imageCount := 0
-	totalImages := len(c.sizes) * len(c.colorModes)
-
-	for _, sizeStr := range c.sizes {
-		width, height, err := parseSize(sizeStr)
-		if err != nil {
-			return fmt.Errorf("invalid size %s: %w", sizeStr, err)
+	if len(c.colorDefs) == 0 {
+		// Default: solid gray
+		c.colorDefs = []ColorDefinition{
+			{
+				Mode:   generator.ColorModeSolid,
+				Colors: []color.Color{color.Gray{128}},
+			},
 		}
+	}
 
-		for _, mode := range c.colorModes {
-			imageCount++
+	// Parse border if provided
+	var borderWidth int
+	var borderColor color.Color = color.Black
+	if c.border != "" {
+		parts := strings.Split(c.border, ",")
+		if len(parts) != 2 {
+			return fmt.Errorf("border must be in format width,color")
+		}
+		var err error
+		borderWidth, err = strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return fmt.Errorf("invalid border width: %w", err)
+		}
+		borderColor, err = generator.ParseColor(strings.TrimSpace(parts[1]))
+		if err != nil {
+			return fmt.Errorf("invalid border color: %w", err)
+		}
+	}
 
-			// Create configuration
-			config := generator.DefaultConfig()
-			config.Width = width
-			config.Height = height
-			config.ColorMode = generator.ColorMode(mode)
-			config.GradientAngle = c.gradientAngle
-			config.TileSize = c.tileSize
-			config.Text = c.text
-			config.TextSize = c.textSize
-			config.Format = c.format
-			config.BorderWidth = c.borderWidth
+	// Parse default text color if provided
+	var defaultTextColor *color.Color
+	if c.textColor != "" {
+		col, err := generator.ParseColor(c.textColor)
+		if err != nil {
+			return fmt.Errorf("invalid text color: %w", err)
+		}
+		defaultTextColor = &col
+	}
 
-			// Parse colors
-			config.Colors = make([]color.Color, 0, len(c.colors))
-			for _, colorStr := range c.colors {
-				col, err := generator.ParseColor(colorStr)
-				if err != nil {
-					return fmt.Errorf("invalid color %s: %w", colorStr, err)
-				}
-				config.Colors = append(config.Colors, col)
-			}
+	// Generate images: sizes * color definitions * rounds
+	imageCount := 0
+	totalImages := len(c.sizes) * len(c.colorDefs) * c.rounds
 
-			// Parse border color
-			if c.borderColor != "" {
-				borderCol, err := generator.ParseColor(c.borderColor)
-				if err != nil {
-					return fmt.Errorf("invalid border color %s: %w", c.borderColor, err)
-				}
-				config.BorderColor = borderCol
-			}
-
-			// Parse text color
-			if c.textColor != "" {
-				textCol, err := generator.ParseColor(c.textColor)
-				if err != nil {
-					return fmt.Errorf("invalid text color %s: %w", c.textColor, err)
-				}
-				config.TextColor = &textCol
-			}
-
-			// Generate filename
-			filename := c.filename
-			if totalImages > 1 {
-				// Add numbering for multiple images
-				ext := ""
-				if idx := strings.LastIndex(filename, "."); idx != -1 {
-					ext = filename[idx:]
-					filename = filename[:idx]
-				}
-				filename = fmt.Sprintf("%s-%04d%s", filename, imageCount, ext)
-			}
-
-			// Replace placeholders in filename
-			filename = strings.ReplaceAll(filename, "{w}", strconv.Itoa(width))
-			filename = strings.ReplaceAll(filename, "{h}", strconv.Itoa(height))
-			filename = strings.ReplaceAll(filename, "{nr}", strconv.Itoa(imageCount))
-
-			// Generate image
-			gen := generator.NewGenerator(config)
-			img, err := gen.Generate()
+	for round := 1; round <= c.rounds; round++ {
+		for _, sizeStr := range c.sizes {
+			width, height, err := parseSize(sizeStr)
 			if err != nil {
-				return fmt.Errorf("failed to generate image: %w", err)
+				return fmt.Errorf("invalid size %s: %w", sizeStr, err)
 			}
 
-			// Write to file
-			file, err := os.Create(filename)
-			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", filename, err)
-			}
+			for _, colorDef := range c.colorDefs {
+				imageCount++
 
-			if err := gen.WriteImage(file, img); err != nil {
+				// Regenerate random colors for each round (but not for the first round)
+				actualColorDef := colorDef
+				if round > 1 && hasRandomColor(colorDef) {
+					// Re-parse the original color definition to get new random colors
+					var err error
+					actualColorDef, err = regenerateRandomColors(colorDef)
+					if err != nil {
+						return fmt.Errorf("failed to regenerate random colors: %w", err)
+					}
+				}
+
+				// Create configuration
+				config := generator.DefaultConfig()
+				config.Width = width
+				config.Height = height
+				config.ColorMode = actualColorDef.Mode
+				config.Colors = actualColorDef.Colors
+				config.GradientAngle = actualColorDef.Angle
+				config.TileSize = actualColorDef.TileSize
+				config.Text = c.text
+				config.TextSize = c.textSize
+				config.TextAngle = c.textAngle
+				config.Format = c.format
+				config.BorderWidth = borderWidth
+				config.BorderColor = borderColor
+
+				// Text color priority: color parameter > default text color > auto
+				if actualColorDef.TextColor != nil {
+					config.TextColor = actualColorDef.TextColor
+				} else if defaultTextColor != nil {
+					config.TextColor = defaultTextColor
+				}
+
+				// Generate filename
+				filename := c.filename
+				if totalImages > 1 {
+					// Add numbering for multiple images
+					ext := ""
+					if idx := strings.LastIndex(filename, "."); idx != -1 {
+						ext = filename[idx:]
+						filename = filename[:idx]
+					}
+					filename = fmt.Sprintf("%s-%04d%s", filename, imageCount, ext)
+				}
+
+				// Replace placeholders in filename
+				filename = strings.ReplaceAll(filename, "{w}", strconv.Itoa(width))
+				filename = strings.ReplaceAll(filename, "{h}", strconv.Itoa(height))
+				filename = strings.ReplaceAll(filename, "{nr}", strconv.Itoa(imageCount))
+
+				// Generate image
+				gen := generator.NewGenerator(config)
+				img, err := gen.Generate()
+				if err != nil {
+					return fmt.Errorf("failed to generate image: %w", err)
+				}
+
+				// Write to file
+				file, err := os.Create(filename)
+				if err != nil {
+					return fmt.Errorf("failed to create file %s: %w", filename, err)
+				}
+
+				if err := gen.WriteImage(file, img); err != nil {
+					file.Close()
+					return fmt.Errorf("failed to write image to %s: %w", filename, err)
+				}
+
 				file.Close()
-				return fmt.Errorf("failed to write image to %s: %w", filename, err)
+				fmt.Printf("Generated: %s (%dx%d, %s)\n", filename, width, height, colorDef.Mode)
 			}
-
-			file.Close()
-			fmt.Printf("Generated: %s (%dx%d, %s)\n", filename, width, height, mode)
 		}
 	}
 
 	return nil
+}
+
+// parseColorParameter parses a color parameter string based on the mode
+// Format examples:
+//   - solid: "blue" or "blue:t:white"
+//   - gradient: "red,blue" or "red,blue:45" or "red,blue:45:t:white"
+//   - tiles: "red,blue" or "red,blue:10" or "red,blue:10:t:white"
+//   - noise: "red,blue,green" or "red,blue,green:10" or "red,blue,green:10:t:white"
+func parseColorParameter(param string, mode generator.ColorMode) (ColorDefinition, error) {
+	def := ColorDefinition{
+		Mode:     mode,
+		Angle:    0,
+		TileSize: 36, // default tile size
+	}
+
+	// Check for text color override at the end (:t:color)
+	textColorIdx := strings.LastIndex(param, ":t:")
+	if textColorIdx != -1 {
+		textColorStr := param[textColorIdx+3:]
+		param = param[:textColorIdx]
+
+		textCol, err := generator.ParseColor(textColorStr)
+		if err != nil {
+			return def, fmt.Errorf("invalid text color %s: %w", textColorStr, err)
+		}
+		def.TextColor = &textCol
+	}
+
+	switch mode {
+	case generator.ColorModeSolid:
+		// Format: color
+		colorStr := strings.TrimSpace(param)
+		def.ColorStrings = []string{colorStr}
+		col, err := generator.ParseColor(colorStr)
+		if err != nil {
+			return def, fmt.Errorf("invalid color %s: %w", colorStr, err)
+		}
+		def.Colors = []color.Color{col}
+
+	case generator.ColorModeGradient:
+		// Format: color1,color2[,color3...][:angle]
+		parts := strings.Split(param, ":")
+		colorsPart := parts[0]
+
+		// Parse angle if provided
+		if len(parts) > 1 {
+			angle, err := strconv.ParseFloat(parts[1], 64)
+			if err != nil {
+				return def, fmt.Errorf("invalid gradient angle %s: %w", parts[1], err)
+			}
+			def.Angle = angle
+		}
+
+		// Parse colors
+		colorStrs := strings.Split(colorsPart, ",")
+		if len(colorStrs) < 2 {
+			return def, fmt.Errorf("gradient requires at least 2 colors")
+		}
+
+		def.ColorStrings = make([]string, len(colorStrs))
+		def.Colors = make([]color.Color, 0, len(colorStrs))
+		for i, colorStr := range colorStrs {
+			colorStr = strings.TrimSpace(colorStr)
+			def.ColorStrings[i] = colorStr
+			col, err := generator.ParseColor(colorStr)
+			if err != nil {
+				return def, fmt.Errorf("invalid color %s: %w", colorStr, err)
+			}
+			def.Colors = append(def.Colors, col)
+		}
+
+	case generator.ColorModeTiled, generator.ColorModeNoise:
+		// Format: color1,color2[,color3...][:tilesize]
+		parts := strings.Split(param, ":")
+		colorsPart := parts[0]
+
+		// Parse tile size if provided
+		if len(parts) > 1 {
+			tileSize, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return def, fmt.Errorf("invalid tile size %s: %w", parts[1], err)
+			}
+			def.TileSize = tileSize
+		}
+
+		// Parse colors
+		colorStrs := strings.Split(colorsPart, ",")
+		if len(colorStrs) < 2 {
+			return def, fmt.Errorf("tiles/noise requires at least 2 colors")
+		}
+
+		def.ColorStrings = make([]string, len(colorStrs))
+		def.Colors = make([]color.Color, 0, len(colorStrs))
+		for i, colorStr := range colorStrs {
+			colorStr = strings.TrimSpace(colorStr)
+			def.ColorStrings[i] = colorStr
+			col, err := generator.ParseColor(colorStr)
+			if err != nil {
+				return def, fmt.Errorf("invalid color %s: %w", colorStr, err)
+			}
+			def.Colors = append(def.Colors, col)
+		}
+	}
+
+	return def, nil
 }
 
 // parseSize parses a size string in format "WxH"
@@ -215,4 +405,30 @@ func parseSize(sizeStr string) (width, height int, err error) {
 	}
 
 	return width, height, nil
+}
+
+// hasRandomColor checks if a color definition contains any "random" color strings
+func hasRandomColor(def ColorDefinition) bool {
+	for _, colorStr := range def.ColorStrings {
+		if strings.ToLower(strings.TrimSpace(colorStr)) == "random" {
+			return true
+		}
+	}
+	return false
+}
+
+// regenerateRandomColors regenerates random colors in a color definition
+func regenerateRandomColors(def ColorDefinition) (ColorDefinition, error) {
+	newDef := def
+	newDef.Colors = make([]color.Color, len(def.ColorStrings))
+
+	for i, colorStr := range def.ColorStrings {
+		col, err := generator.ParseColor(colorStr)
+		if err != nil {
+			return newDef, fmt.Errorf("invalid color %s: %w", colorStr, err)
+		}
+		newDef.Colors[i] = col
+	}
+
+	return newDef, nil
 }

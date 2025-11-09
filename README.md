@@ -35,18 +35,57 @@ imagen serve [parameters]
 
 ### generate parameters
 
-- `--size=[WxH]`, `-s [WxH]`: width/height. defaults to 256x192. Can be given multiple times to generate multiple images (see `--filename` below)
-- `--color-mode=[mode]`, `-m [mode]`: The color mode. Valid modes are: `solid`, `tiled`, `gradient`, `noise`. The difference of "tiled" and "noise" is the randomness: "tiled" mode generates tile colors in order, while "noise" produces random tiles.
-- `--color=[color]`, `-c [color]`: single color when using "solid". Can be a name (e.g. `blue`), an RGB code (e.g. `A0F34B`), `random` for a complete random color, or a comma-separated list of the values before: This list is used when using the `--nr` parameter to generate multiple images: It then randomly selects one entry from the list per image. This parameter can be repeated for defining multiple colors for the other modes.
-- `--border-width=[nr]` `-b [width]`: The border with in pixels
-- `--border-color=[color]`: The border color
-- `--gradient-angle=angle`, `-a angle`: The gradient angle in degrees (0 = top-down, 180=bottom up)
-- `--tile-size=width`, `-s width`: The size in pixel of a single tile in tile/noise mode
-- `--text=[text]`, `-t text`: The text to output. You can use `{w}` and `{h}` as placeholder for the generated size.
-- `--text-size=[size]`: The text size in pt
-- `--text-color=[color]`: The text color (e.g. `white` or `ffffff`)
-- `--nr=[nr]`, `-n nr`: Number of images to create. The filename is enhanced with a large enough counting number (e.g. `image-0001.png`)
-- `--filename=[filename]`, `-f filename`: Output filename. You can use `{w}`, `{h}`, `{nr}` in the filename as placeholders for width, height, and image number
+`--size=[WxH]`, `-s [WxH]`: width/height. defaults to 256x192. Can be given multiple times to generate multiple images (see `--filename` below)
+
+`--color=[single color]`, `-c [single color]`: The color parameter defines a single background color (solid color):
+
+- `-c aliceblue`: single background color, html name aliceblue
+- `-c ff0000`: single background color, red in hex code
+- `-c random`: single background color, random color from the RGB spectrum
+
+`--gradient=[color1],[color2]:[angle]`, `-g [color1],[color2]:[angle]`: gradient of two or more colors and an optional gradient angle:
+
+- `-g red,0000ff`: Gradient background from red to blue (hex), top to bottom (angle 0)
+- `-g 0000ff,random:45`: Gradient background from blue (hex) to a random color, 45 degrees tilted
+
+`--tiles=[color1],[color2][...[color-n]]:[tile-size]`, `-t [color1],[color2][...[color-n]]:[tile-size]`: colored tiles with n colors. At least 2 colors must be defined, then colored tiles of the given size are created. Colors are applied in order.
+
+- `-t red,green,blue`: Tiles alternating from red to green to blue, tile size 36px by default
+- `-t red,ffffff:10`: Tiles alternating from red to white, tile size 10px
+
+`--noise=[color1],[color2][...[color-n]]:[tile-size]`, `-n [color1],[color2][...[color-n]]:[tile-size]`: like colored tiles with n colors, but colors are applied randomly (like noise, so the 'n' stands for noise). At least 2 colors must be defined, then colored tiles of the given size are created. Colors are applied randomly.
+
+- `-n red,green,blue`: Tiles randomly colored from red to green to blue, tile size 36px by default
+- `-n red,ffffff:10`: Tiles randomly colored from red to white, tile size 10px
+
+In addition, all color parameter forms also take an optional text color information with `:t:[color]`, to set the text color. Examples:
+
+- `-c aliceblue:t:red` creates a single-colored aliceblue background with red font color
+- `-g 0000ff,random:45:t:red`: Gradient background from blue (hex) to a random color, 45 degrees tilted, with red text color
+- `-t red,ffffff:10:t:blue`: Tiles alternating from red to white, tile size 10px, with red text
+- `-n red,ffffff:10:t:blue`: Noise Tiles from red to white, tile size 10px, with red text
+
+You can provide multiple color parameters, from different and the same types. If multiple color parameters are given, the CLI generates an image for each color parameter. Example:
+
+`imagen -c blue -c random -g blue,ff0000` will generate 3 images: one with a blue background, one with a random color background, and one with a gradient of blue to red.
+
+
+`--border=[width],[color]` `-b [width],[color]`: The border width in pixels and color
+
+`--text=[text]`: The text to output. You can use `{w}` and `{h}` as placeholder for the generated size.
+
+`--text-size=[size]`: The text size in pt
+
+`--text-color=[color]`: The text color (e.g. `white` or `ffffff`). Note: if a text color is specified in a color parameter (e.g. `-c blue:t:red`), that takes precedence over this default text color.
+
+`--nr=[nr]`, `-r [nr]`: Number of runs: a "Run" may create one or more images, according to the color parameters above:
+This is useful if you have random colors, and want to generate multiple images from the same color definitions. The image number can be used in the filename template: the `{nr}` placeholder will be replaced with the actual image number.
+
+Example:
+
+`imagen -c random -g blue,random -r 3` will create 6 images (2 different colors with 3 "runs"), while the random generated colors are different each time.
+
+`--filename=[filename]`, `-f filename`: Output filename. You can use `{w}`, `{h}`, `{nr}` in the filename as placeholders for width, height, and image number
 
 ### serve parameters
 
@@ -87,7 +126,7 @@ A background definition begins with a single char, which defines the mode, then 
 	- `c:aliceblue`: single background color, html name aliceblue
 	- `c:ff0000`: single background color, red in hex code
 	- `c:random`: single background color, random color from the RGB spectrum
-- `g:[color1],[color2]:[angle]`: gradient of two colors and a gradient angle:
+- `g:[color1],[color2]:[angle]`: gradient of two or more colors and a gradient angle:
   - `g:red,0000ff`: Gradient background from red to blue (hex), top to bottom (angle 0)
   - `g:0000ff,random:45`: Gradient background from blue (hex) to a random color, 45 degrees tilted
 - `t:[color1],[color2][...[color-n]]:[tile-size]`: colored tiles with n colors. At least 2 colors must be defined, then colored tiles of the given size are created. Colors are applied in order.
