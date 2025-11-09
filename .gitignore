@@ -1,5 +1,5 @@
 # Binaries
-imagen
+/imagen
 *.exe
 *.dll
 *.so
