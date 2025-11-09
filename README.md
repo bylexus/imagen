@@ -94,7 +94,7 @@ A background definition begins with a single char, which defines the mode, then 
 	- `c:random`: single background color, random color from the RGB spectrum
 - `g:[color1],[color2]:[angle]`: gradient of two colors and a gradient angle:
   - `g:red,0000ff`: Gradient background from red to blue (hex), top to bottom (angle 0)
-  - `g:0000ff,random,45`: Gradient background from blue (hex) to a random color, 45 degrees tilted
+  - `g:0000ff,random:45`: Gradient background from blue (hex) to a random color, 45 degrees tilted
 - `t:[color1],[color2][...[color-n]]:[tile-size]`: colored tiles with n colors. At least 2 colors must be defined, then colored tiles of the given size are created. Colors are applied in order.
   - `t:red,green,blue`: Tiles alternating from red to green to blue, tile size 36px by default
   - `t:red,ffffff:10`: Tiles alternating from red to white, tile size 10px
@@ -105,9 +105,9 @@ A background definition begins with a single char, which defines the mode, then 
 In addition, all parameter forms also take an optional text color information with `:t:[color]`, to set the text color. Examples:
 
 - `c:aliceblue:t:red` creates a single-colored aliceblue background with red font color
-- `g:0000ff,random,45:t:red`: Gradient background from blue (hex) to a random color, 45 degrees tilted, with red text color
-- `t:red,ffffff:10,t:blue`: Tiles alternating from red to white, tile size 10px, with red text
-- `n:red,ffffff:10,t:blue`: Noise Tiles from red to white, tile size 10px, with red text
+- `g:0000ff,random:45:t:red`: Gradient background from blue (hex) to a random color, 45 degrees tilted, with red text color
+- `t:red,ffffff:10:t:blue`: Tiles alternating from red to white, tile size 10px, with red text
+- `n:red,ffffff:10:t:blue`: Noise Tiles from red to white, tile size 10px, with red text
 
 Color parameters can be defined multiple times: If multiple color parameters are given in the URL,
 each requested image choses one color definition randomly.
@@ -154,7 +154,7 @@ The `b:size,color`  parameter defines a border around the image, e.g.
 - Image size: 500x300, red to blue gradient, white text
   `http://[imagen-url]/500x300/g:red,blue:t:white`
 - Image size: 500x300, red to blue gradient, angled 120 degrees, white text
-  `http://[imagen-url]/500x300/g:red,blue,120:t:white`
+  `http://[imagen-url]/500x300/g:red,blue:120:t:white`
 - Image size: 500x300, either a solid green color or tiles of blue/white, 10px wide, and a black 10px border. A white text, 30pt, states "Hello, World 500x300". The color mode is chosen randomly:
   `http://[imagen-url]/500x300/c:00ff00/t:white,blue:10/b:10,black/t:"Hello, World {w}x{h},s:30,c:white"`
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,8 +78,17 @@ func (s *Server) handleImageRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ColorDefinition holds a parsed background color configuration
+type ColorDefinition struct {
+	Mode      generator.ColorMode
+	Colors    []color.Color
+	Angle     float64
+	TileSize  int
+	TextColor *color.Color
+}
+
 // parseURLConfig parses the URL path and returns an ImageConfig
-// URL format: /[size]/c:[color-config]/t:[text]/f:[format]/b:[border]
+// URL format: /[size]/[c|g|t|n]:[color-config]/t:[text]/f:[format]/b:[border]
 func parseURLConfig(path string) (*generator.ImageConfig, error) {
 	config := generator.DefaultConfig()
 
@@ -92,6 +102,9 @@ func parseURLConfig(path string) (*generator.ImageConfig, error) {
 
 	// Split by /
 	parts := strings.Split(path, "/")
+
+	// Collect all color definitions for random selection
+	var colorDefs []ColorDefinition
 
 	for i, part := range parts {
 		if part == "" {
@@ -118,14 +131,40 @@ func parseURLConfig(path string) (*generator.ImageConfig, error) {
 		value := part[2:]
 
 		switch prefix {
-		case 'c': // color configuration
-			if err := parseColorConfig(config, value); err != nil {
-				return nil, fmt.Errorf("invalid color config: %w", err)
+		case 'c': // solid color background
+			colorDef, err := parseSolidBackground(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid solid background: %w", err)
 			}
-		case 't': // text configuration
-			if err := parseTextConfig(config, value); err != nil {
-				return nil, fmt.Errorf("invalid text config: %w", err)
+			colorDefs = append(colorDefs, colorDef)
+		case 'g': // gradient background
+			colorDef, err := parseGradientBackground(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid gradient background: %w", err)
 			}
+			colorDefs = append(colorDefs, colorDef)
+		case 't': // tiled background OR text
+			// Determine if this is a tiled background or text
+			// Text starts with a quote, tiled starts with a color
+			if strings.HasPrefix(value, "\"") {
+				// This is text
+				if err := parseTextConfig(config, value); err != nil {
+					return nil, fmt.Errorf("invalid text config: %w", err)
+				}
+			} else {
+				// This is tiled background
+				colorDef, err := parseTiledBackground(value)
+				if err != nil {
+					return nil, fmt.Errorf("invalid tiled background: %w", err)
+				}
+				colorDefs = append(colorDefs, colorDef)
+			}
+		case 'n': // noise background
+			colorDef, err := parseNoiseBackground(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid noise background: %w", err)
+			}
+			colorDefs = append(colorDefs, colorDef)
 		case 'f': // format
 			config.Format = value
 		case 'b': // border
@@ -137,75 +176,235 @@ func parseURLConfig(path string) (*generator.ImageConfig, error) {
 		}
 	}
 
+	// If we have color definitions, randomly select one
+	if len(colorDefs) > 0 {
+		selectedDef := colorDefs[rand.Intn(len(colorDefs))]
+		config.ColorMode = selectedDef.Mode
+		config.Colors = selectedDef.Colors
+		config.GradientAngle = selectedDef.Angle
+		config.TileSize = selectedDef.TileSize
+		if selectedDef.TextColor != nil {
+			config.TextColor = selectedDef.TextColor
+		}
+	}
+
 	return config, nil
 }
 
-// parseColorConfig parses color configuration
-// Format: [mode],[color1],[color2],...,a:[angle],ts:[tilesize]
-func parseColorConfig(config *generator.ImageConfig, value string) error {
-	// Unquote if quoted
-	value = strings.Trim(value, "\"")
-
-	parts := strings.Split(value, ",")
-	if len(parts) == 0 {
-		return fmt.Errorf("empty color config")
+// parseSolidBackground parses solid color background
+// Format: c:[color][:t:[textcolor]]
+func parseSolidBackground(value string) (ColorDefinition, error) {
+	def := ColorDefinition{
+		Mode:     generator.ColorModeSolid,
+		Colors:   []color.Color{},
+		TileSize: 16,
 	}
 
-	// First part might be mode or color
-	firstPart := parts[0]
-
-	// Check if it's a mode
-	if firstPart == "solid" || firstPart == "tiled" || firstPart == "gradient" || firstPart == "noise" {
-		config.ColorMode = generator.ColorMode(firstPart)
-		parts = parts[1:]
+	// Split by : to separate color from optional text color
+	parts := strings.Split(value, ":t:")
+	if len(parts) > 2 {
+		return def, fmt.Errorf("invalid solid background format")
 	}
 
-	// Parse remaining parts
-	config.Colors = []color.Color{}
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
+	// Parse the main color
+	col, err := generator.ParseColor(parts[0])
+	if err != nil {
+		return def, fmt.Errorf("invalid color: %w", err)
+	}
+	def.Colors = append(def.Colors, col)
 
-		// Check for special parameters
-		if strings.HasPrefix(part, "a:") {
-			angle, err := strconv.ParseFloat(part[2:], 64)
-			if err != nil {
-				return fmt.Errorf("invalid angle: %w", err)
-			}
-			config.GradientAngle = angle
-			continue
-		}
-
-		if strings.HasPrefix(part, "ts:") {
-			tileSize, err := strconv.Atoi(part[3:])
-			if err != nil {
-				return fmt.Errorf("invalid tile size: %w", err)
-			}
-			config.TileSize = tileSize
-			continue
-		}
-
-		// Parse as color
-		col, err := generator.ParseColor(part)
+	// Parse optional text color
+	if len(parts) == 2 {
+		textCol, err := generator.ParseColor(parts[1])
 		if err != nil {
-			return fmt.Errorf("invalid color %s: %w", part, err)
+			return def, fmt.Errorf("invalid text color: %w", err)
 		}
-		config.Colors = append(config.Colors, col)
+		def.TextColor = &textCol
 	}
 
-	// Default to gray if no colors specified
-	if len(config.Colors) == 0 {
-		col, _ := generator.ParseColor("gray")
-		config.Colors = []color.Color{col}
+	return def, nil
+}
+
+// parseGradientBackground parses gradient background
+// Format: g:[color1],[color2][,[color3]...][:angle][:t:[textcolor]]
+func parseGradientBackground(value string) (ColorDefinition, error) {
+	def := ColorDefinition{
+		Mode:     generator.ColorModeGradient,
+		Colors:   []color.Color{},
+		Angle:    0,
+		TileSize: 16,
 	}
 
-	return nil
+	// Split by :t: to separate main config from optional text color
+	parts := strings.Split(value, ":t:")
+	if len(parts) > 2 {
+		return def, fmt.Errorf("invalid gradient background format")
+	}
+
+	mainPart := parts[0]
+
+	// Parse optional text color
+	if len(parts) == 2 {
+		textCol, err := generator.ParseColor(parts[1])
+		if err != nil {
+			return def, fmt.Errorf("invalid text color: %w", err)
+		}
+		def.TextColor = &textCol
+	}
+
+	// Split main part by : to separate colors from optional angle
+	colorAndAngle := strings.Split(mainPart, ":")
+	if len(colorAndAngle) > 2 {
+		return def, fmt.Errorf("invalid gradient format")
+	}
+
+	// Parse colors (comma-separated)
+	colorsPart := colorAndAngle[0]
+	colorStrs := strings.Split(colorsPart, ",")
+	if len(colorStrs) < 2 {
+		return def, fmt.Errorf("gradient requires at least 2 colors")
+	}
+
+	for _, colorStr := range colorStrs {
+		col, err := generator.ParseColor(strings.TrimSpace(colorStr))
+		if err != nil {
+			return def, fmt.Errorf("invalid color %s: %w", colorStr, err)
+		}
+		def.Colors = append(def.Colors, col)
+	}
+
+	// Parse optional angle
+	if len(colorAndAngle) == 2 {
+		angle, err := strconv.ParseFloat(colorAndAngle[1], 64)
+		if err != nil {
+			return def, fmt.Errorf("invalid angle: %w", err)
+		}
+		def.Angle = angle
+	}
+
+	return def, nil
+}
+
+// parseTiledBackground parses tiled background
+// Format: t:[color1],[color2][,[color3]...][:tilesize][:t:[textcolor]]
+func parseTiledBackground(value string) (ColorDefinition, error) {
+	def := ColorDefinition{
+		Mode:     generator.ColorModeTiled,
+		Colors:   []color.Color{},
+		TileSize: 36, // default from README
+	}
+
+	// Split by :t: to separate main config from optional text color
+	parts := strings.Split(value, ":t:")
+	if len(parts) > 2 {
+		return def, fmt.Errorf("invalid tiled background format")
+	}
+
+	mainPart := parts[0]
+
+	// Parse optional text color
+	if len(parts) == 2 {
+		textCol, err := generator.ParseColor(parts[1])
+		if err != nil {
+			return def, fmt.Errorf("invalid text color: %w", err)
+		}
+		def.TextColor = &textCol
+	}
+
+	// Split main part by : to separate colors from optional tile size
+	colorAndSize := strings.Split(mainPart, ":")
+	if len(colorAndSize) > 2 {
+		return def, fmt.Errorf("invalid tiled format")
+	}
+
+	// Parse colors (comma-separated)
+	colorsPart := colorAndSize[0]
+	colorStrs := strings.Split(colorsPart, ",")
+	if len(colorStrs) < 2 {
+		return def, fmt.Errorf("tiled requires at least 2 colors")
+	}
+
+	for _, colorStr := range colorStrs {
+		col, err := generator.ParseColor(strings.TrimSpace(colorStr))
+		if err != nil {
+			return def, fmt.Errorf("invalid color %s: %w", colorStr, err)
+		}
+		def.Colors = append(def.Colors, col)
+	}
+
+	// Parse optional tile size
+	if len(colorAndSize) == 2 {
+		size, err := strconv.Atoi(colorAndSize[1])
+		if err != nil {
+			return def, fmt.Errorf("invalid tile size: %w", err)
+		}
+		def.TileSize = size
+	}
+
+	return def, nil
+}
+
+// parseNoiseBackground parses noise background
+// Format: n:[color1],[color2][,[color3]...][:tilesize][:t:[textcolor]]
+func parseNoiseBackground(value string) (ColorDefinition, error) {
+	def := ColorDefinition{
+		Mode:     generator.ColorModeNoise,
+		Colors:   []color.Color{},
+		TileSize: 36, // default from README
+	}
+
+	// Split by :t: to separate main config from optional text color
+	parts := strings.Split(value, ":t:")
+	if len(parts) > 2 {
+		return def, fmt.Errorf("invalid noise background format")
+	}
+
+	mainPart := parts[0]
+
+	// Parse optional text color
+	if len(parts) == 2 {
+		textCol, err := generator.ParseColor(parts[1])
+		if err != nil {
+			return def, fmt.Errorf("invalid text color: %w", err)
+		}
+		def.TextColor = &textCol
+	}
+
+	// Split main part by : to separate colors from optional tile size
+	colorAndSize := strings.Split(mainPart, ":")
+	if len(colorAndSize) > 2 {
+		return def, fmt.Errorf("invalid noise format")
+	}
+
+	// Parse colors (comma-separated)
+	colorsPart := colorAndSize[0]
+	colorStrs := strings.Split(colorsPart, ",")
+	if len(colorStrs) < 2 {
+		return def, fmt.Errorf("noise requires at least 2 colors")
+	}
+
+	for _, colorStr := range colorStrs {
+		col, err := generator.ParseColor(strings.TrimSpace(colorStr))
+		if err != nil {
+			return def, fmt.Errorf("invalid color %s: %w", colorStr, err)
+		}
+		def.Colors = append(def.Colors, col)
+	}
+
+	// Parse optional tile size
+	if len(colorAndSize) == 2 {
+		size, err := strconv.Atoi(colorAndSize[1])
+		if err != nil {
+			return def, fmt.Errorf("invalid tile size: %w", err)
+		}
+		def.TileSize = size
+	}
+
+	return def, nil
 }
 
 // parseTextConfig parses text configuration
-// Format: "text",s:[size],c:[color],a:[angle]
+// Format: t:"text"[,s:size][,c:color][,a:angle]
 func parseTextConfig(config *generator.ImageConfig, value string) error {
 	// Split by comma while respecting quotes
 	parts := splitRespectingQuotes(value)
@@ -289,7 +488,7 @@ func splitRespectingQuotes(s string) []string {
 }
 
 // parseBorderConfig parses border configuration
-// Format: [width],[color]
+// Format: b:width,color
 func parseBorderConfig(config *generator.ImageConfig, value string) error {
 	parts := strings.Split(value, ",")
 	if len(parts) == 0 {
