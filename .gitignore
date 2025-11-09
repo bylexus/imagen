@@ -11,6 +11,12 @@ imagen
 *.jpeg
 *.webp
 
+# But include examples
+!examples/
+!examples/*.png
+!examples/*.jpg
+!examples/*.jpeg
+
 # IDE
 .vscode/
 .idea/

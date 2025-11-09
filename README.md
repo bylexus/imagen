@@ -4,6 +4,241 @@ imagen is a small image creation utility to create placeholder images. It can ei
 
 **Disclaimer:** This utility was created almost completely with Claude Code - I did only a very rough code review.
 
+## Examples
+
+Let's begin with some examples, as images say more than 1000 words :-)
+
+### CLI Examples
+
+#### Basic usage
+
+```bash
+# Generate default image (256x192, gray background)
+imagen generate
+
+# Specific size with blue background
+imagen generate --size 800x600 --color blue
+```
+
+[<img src="examples/basic-blue.png" width="400" alt="Blue background example">](examples/basic-blue.png)
+
+```bash
+# Custom text and size
+imagen generate -s 1920x1080 -c darkslateblue --text "My Placeholder" --text-size 48
+```
+
+[<img src="examples/basic-custom-text.png" width="400" alt="Custom text example">](examples/basic-custom-text.png)
+
+#### Gradients
+
+```bash
+# Simple gradient from red to blue
+imagen generate -s 1024x768 -g red,blue
+```
+
+[<img src="examples/gradient-simple.png" width="400" alt="Simple gradient example">](examples/gradient-simple.png)
+
+```bash
+# Gradient with angle
+imagen generate -s 1024x768 -g ff0000,0000ff:45
+```
+
+[<img src="examples/gradient-angled.png" width="400" alt="Angled gradient example">](examples/gradient-angled.png)
+
+```bash
+# Multi-color gradient
+imagen generate -s 800x600 -g red,yellow,green,blue:90
+```
+
+[<img src="examples/gradient-multi.png" width="400" alt="Multi-color gradient example">](examples/gradient-multi.png)
+
+#### Tiles and Patterns
+
+```bash
+# Checkered pattern with default tile size
+imagen generate -s 800x600 -t black,white
+```
+
+[<img src="examples/tiles-checkered.png" width="400" alt="Checkered tiles example">](examples/tiles-checkered.png)
+
+```bash
+# Colored tiles with custom size
+imagen generate -s 600x400 -t red,green,blue:50
+```
+
+[<img src="examples/tiles-colored.png" width="400" alt="Colored tiles example">](examples/tiles-colored.png)
+
+```bash
+# Random noise pattern
+imagen generate -s 800x600 -n 336699,99ccff,ffffff:20
+```
+
+[<img src="examples/noise-pattern.png" width="400" alt="Noise pattern example">](examples/noise-pattern.png)
+
+#### Text customization
+
+```bash
+# Custom text color
+imagen generate -s 500x300 -c navy --text "Hello World" --text-color yellow --text-size 36
+```
+
+[<img src="examples/text-colored.png" width="400" alt="Custom text color example">](examples/text-colored.png)
+
+```bash
+# Rotated text
+imagen generate -s 600x400 -c teal --text "Rotated!" --text-angle 45 --text-size 40
+```
+
+[<img src="examples/text-rotated.png" width="400" alt="Rotated text example">](examples/text-rotated.png)
+
+#### Borders
+
+```bash
+# Simple border
+imagen generate -s 800x600 -c lightblue -b 10,navy
+```
+
+[<img src="examples/border-simple.png" width="400" alt="Simple border example">](examples/border-simple.png)
+
+```bash
+# Border with gradient background
+imagen generate -s 1024x768 -g skyblue,darkblue:90 -b 5,white
+```
+
+[<img src="examples/border-gradient.png" width="400" alt="Border with gradient example">](examples/border-gradient.png)
+
+#### Multiple images and formats
+
+```bash
+# Generate multiple sizes
+imagen generate -s 400x300 -s 800x600 -s 1920x1080 -c steelblue
+
+# Multiple color variations
+imagen generate -s 800x600 -c red -c green -c blue -f output.png
+
+# JPEG output
+imagen generate -s 1920x1080 -c coral --format jpeg -f banner.jpg
+```
+
+#### Random colors with multiple runs
+
+The `--nr` (number of runs) parameter is especially useful when working with random colors. Each run regenerates random colors, allowing you to create multiple variations from the same configuration:
+
+```bash
+# Generate 5 variations: each with a random solid color and a random gradient
+# This creates 10 images total (2 color definitions × 5 runs)
+# Output: placeholder-0001.png through placeholder-0010.png
+imagen generate \
+  -s 800x600 \
+  -c random \
+  -g blue,random:45 \
+  -r 5 \
+  -f "placeholder-{nr}.png"
+
+# Create a set of placeholders with random colors for different sizes
+# Using {w}, {h}, and {nr} in the filename
+# Output: thumb-300x200-0001.png, thumb-300x200-0002.png, ..., hero-1920x1080-0009.png
+imagen generate \
+  -s 300x200 \
+  -s 800x600 \
+  -s 1920x1080 \
+  -c random \
+  -r 3 \
+  -f "thumb-{w}x{h}-{nr}.png"
+```
+
+Example output (2 runs shown):
+
+<a href="examples/random-1-0001.png"><img src="examples/random-1-0001.png" width="250" alt="Random example 1"></a>
+<a href="examples/random-2-0002.png"><img src="examples/random-2-0002.png" width="250" alt="Random example 2"></a>
+<a href="examples/random-3-0003.png"><img src="examples/random-3-0003.png" width="250" alt="Random example 3"></a>
+<a href="examples/random-4-0004.png"><img src="examples/random-4-0004.png" width="250" alt="Random example 4"></a>
+
+#### Complex example
+
+```bash
+# Professional looking placeholder with all features
+imagen generate \
+  --size 1200x630 \
+  --gradient "4A90E2,7B68EE:135" \
+  --text "Coming Soon - {w}x{h}" \
+  --text-size 48 \
+  --text-color white \
+  --border 8,2C3E50 \
+  --filename social-media-placeholder.png
+```
+
+[<img src="examples/complex-example.png" width="500" alt="Complex example with all features">](examples/complex-example.png)
+
+### Web Server Examples
+
+#### Starting the server
+
+```bash
+# Start on default port 3000
+imagen serve
+
+# Custom port
+imagen serve --listen :8080
+
+# Multiple addresses
+imagen serve --listen :3000,192.168.1.100:8080
+```
+
+#### URL Examples
+
+```bash
+# Default image
+http://localhost:3000/
+
+# Basic size
+http://localhost:3000/800x600
+
+# Solid color background
+http://localhost:3000/640x480/c:steelblue
+
+# Gradient
+http://localhost:3000/1024x768/g:ff6b6b,4ecdc4:45
+
+# Tiles
+http://localhost:3000/800x600/t:2c3e50,ecf0f1:40
+
+# Noise pattern
+http://localhost:3000/600x400/n:e74c3c,3498db,2ecc71:25
+
+# Custom text
+http://localhost:3000/1200x630/c:5f27cd/t:"Hello World",s:48,c:ffffff
+
+# Rotated text
+http://localhost:3000/800x600/c:222222/t:"Diagonal Text",s:36,c:00d2d3,a:45
+
+# With border
+http://localhost:3000/1920x1080/g:141e30,243b55/b:10,ff6348/t:"HD Placeholder",s:64,c:ffffff
+
+# Random color selection (refreshes with different color each time)
+http://localhost:3000/800x600/c:red/c:green/c:blue/t:random,blue
+
+# Complex example
+http://localhost:3000/1200x630/g:667eea,764ba2:135/t:"Social Media Banner {w}x{h}",s:42,c:ffffff/b:8,f8f9fa
+```
+
+#### Using in HTML
+
+```html
+<!-- Simple placeholder -->
+<img src="http://localhost:3000/300x200/c:cccccc" alt="Placeholder">
+
+<!-- Responsive placeholder -->
+<img src="http://localhost:3000/1920x1080/g:4facfe,00f2fe"
+     alt="Hero"
+     style="width: 100%; height: auto;">
+
+<!-- Profile picture placeholder -->
+<img src="http://localhost:3000/150x150/c:6c5ce7/t:JD,s:48,c:ffffff"
+     alt="Profile"
+     style="border-radius: 50%;">
+```
+
 ## Installation
 
 ### Prerequisites
@@ -114,195 +349,6 @@ Example:
 `imagen -c random -g blue,random -r 3` will create 6 images (2 different colors with 3 "runs"), while the random generated colors are different each time.
 
 `--filename=[filename]`, `-f filename`: Output filename. You can use `{w}`, `{h}`, `{nr}` in the filename as placeholders for width, height, and image number
-
-## Examples
-
-### CLI Examples
-
-#### Basic usage
-
-```bash
-# Generate default image (256x192, gray background)
-imagen generate
-
-# Specific size with blue background
-imagen generate --size 800x600 --color blue
-
-# Custom text and size
-imagen generate -s 1920x1080 -c darkslateblue --text "My Placeholder" --text-size 48
-```
-
-#### Gradients
-
-```bash
-# Simple gradient from red to blue
-imagen generate -s 1024x768 -g red,blue
-
-# Gradient with angle
-imagen generate -s 1024x768 -g ff0000,0000ff:45
-
-# Multi-color gradient
-imagen generate -s 800x600 -g red,yellow,green,blue:90
-```
-
-#### Tiles and Patterns
-
-```bash
-# Checkered pattern with default tile size
-imagen generate -s 800x600 -t black,white
-
-# Colored tiles with custom size
-imagen generate -s 600x400 -t red,green,blue:50
-
-# Random noise pattern
-imagen generate -s 800x600 -n 336699,99ccff,ffffff:20
-```
-
-#### Text customization
-
-```bash
-# Custom text color
-imagen generate -s 500x300 -c navy --text "Hello World" --text-color yellow --text-size 36
-
-# Rotated text
-imagen generate -s 600x400 -c teal --text "Rotated!" --text-angle 45 --text-size 40
-
-# Using placeholders
-imagen generate -s 1280x720 --text "Size: {w}x{h}" --text-size 30
-```
-
-#### Borders
-
-```bash
-# Simple border
-imagen generate -s 800x600 -c lightblue -b 10,navy
-
-# Border with gradient background
-imagen generate -s 1024x768 -g skyblue,darkblue:90 -b 5,white
-```
-
-#### Multiple images and formats
-
-```bash
-# Generate multiple sizes
-imagen generate -s 400x300 -s 800x600 -s 1920x1080 -c steelblue
-
-# Multiple color variations
-imagen generate -s 800x600 -c red -c green -c blue -f output.png
-
-# JPEG output
-imagen generate -s 1920x1080 -c coral --format jpeg -f banner.jpg
-```
-
-#### Random colors with multiple runs
-
-The `--nr` (number of runs) parameter is especially useful when working with random colors. Each run regenerates random colors, allowing you to create multiple variations from the same configuration:
-
-```bash
-# Generate 5 variations: each with a random solid color and a random gradient
-# This creates 10 images total (2 color definitions × 5 runs)
-# Output: placeholder-0001.png through placeholder-0010.png
-imagen generate \
-  -s 800x600 \
-  -c random \
-  -g blue,random:45 \
-  -r 5 \
-  -f "placeholder-{nr}.png"
-
-# Create a set of placeholders with random colors for different sizes
-# Using {w}, {h}, and {nr} in the filename
-# Output: thumb-300x200-0001.png, thumb-300x200-0002.png, ..., hero-1920x1080-0009.png
-imagen generate \
-  -s 300x200 \
-  -s 800x600 \
-  -s 1920x1080 \
-  -c random \
-  -r 3 \
-  -f "thumb-{w}x{h}-{nr}.png"
-```
-
-#### Complex example
-
-```bash
-# Professional looking placeholder with all features
-imagen generate \
-  --size 1200x630 \
-  --gradient "4A90E2,7B68EE:135" \
-  --text "Coming Soon - {w}x{h}" \
-  --text-size 48 \
-  --text-color white \
-  --border 8,2C3E50 \
-  --filename social-media-placeholder.png
-```
-
-### Web Server Examples
-
-#### Starting the server
-
-```bash
-# Start on default port 3000
-imagen serve
-
-# Custom port
-imagen serve --listen :8080
-
-# Multiple addresses
-imagen serve --listen :3000,192.168.1.100:8080
-```
-
-#### URL Examples
-
-```bash
-# Default image
-http://localhost:3000/
-
-# Basic size
-http://localhost:3000/800x600
-
-# Solid color background
-http://localhost:3000/640x480/c:steelblue
-
-# Gradient
-http://localhost:3000/1024x768/g:ff6b6b,4ecdc4:45
-
-# Tiles
-http://localhost:3000/800x600/t:2c3e50,ecf0f1:40
-
-# Noise pattern
-http://localhost:3000/600x400/n:e74c3c,3498db,2ecc71:25
-
-# Custom text
-http://localhost:3000/1200x630/c:5f27cd/t:"Hello World",s:48,c:ffffff
-
-# Rotated text
-http://localhost:3000/800x600/c:222222/t:"Diagonal Text",s:36,c:00d2d3,a:45
-
-# With border
-http://localhost:3000/1920x1080/g:141e30,243b55/b:10,ff6348/t:"HD Placeholder",s:64,c:ffffff
-
-# Random color selection (refreshes with different color each time)
-http://localhost:3000/800x600/c:red/c:green/c:blue/t:random,blue
-
-# Complex example
-http://localhost:3000/1200x630/g:667eea,764ba2:135/t:"Social Media Banner {w}x{h}",s:42,c:ffffff/b:8,f8f9fa
-```
-
-#### Using in HTML
-
-```html
-<!-- Simple placeholder -->
-<img src="http://localhost:3000/300x200/c:cccccc" alt="Placeholder">
-
-<!-- Responsive placeholder -->
-<img src="http://localhost:3000/1920x1080/g:4facfe,00f2fe"
-     alt="Hero"
-     style="width: 100%; height: auto;">
-
-<!-- Profile picture placeholder -->
-<img src="http://localhost:3000/150x150/c:6c5ce7/t:JD,s:48,c:ffffff"
-     alt="Profile"
-     style="border-radius: 50%;">
-```
 
 ### serve parameters
 
