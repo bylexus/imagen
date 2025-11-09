@@ -137,8 +137,11 @@ func (g *Generator) drawGradientBackground(img *image.RGBA) {
 	angleRad := angle * math.Pi / 180.0
 
 	// Calculate gradient direction vector
+	// 0 degrees = top to bottom (dy positive)
+	// 90 degrees = left to right (dx positive)
+	// 180 degrees = bottom to top (dy negative)
 	dx := math.Sin(angleRad)
-	dy := -math.Cos(angleRad)
+	dy := math.Cos(angleRad)
 
 	// Calculate the maximum distance along the gradient direction
 	corners := []struct{ x, y float64 }{
@@ -222,6 +225,9 @@ func (g *Generator) drawText(img *image.RGBA) {
 		textColor = *g.config.TextColor
 	}
 
+	// Calculate inverted color for text border
+	borderColor := invertColor(textColor)
+
 	// Try to load TrueType font, fall back to basicfont
 	face := g.loadFont()
 
@@ -240,12 +246,49 @@ func (g *Generator) drawText(img *image.RGBA) {
 	x := (g.config.Width - textWidth) / 2
 	y := (g.config.Height + textHeight) / 2
 
-	// Draw the text
-	drawer.Dot = fixed.Point26_6{
+	basePoint := fixed.Point26_6{
 		X: fixed.I(x),
 		Y: fixed.I(y),
 	}
+
+	// Draw text border (outline) by drawing the text in 8 directions with border color
+	borderOffsets := []struct{ dx, dy int }{
+		{-1, -1}, {0, -1}, {1, -1},
+		{-1, 0}, {1, 0},
+		{-1, 1}, {0, 1}, {1, 1},
+	}
+
+	borderDrawer := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(borderColor),
+		Face: face,
+	}
+
+	for _, offset := range borderOffsets {
+		borderDrawer.Dot = fixed.Point26_6{
+			X: basePoint.X + fixed.I(offset.dx),
+			Y: basePoint.Y + fixed.I(offset.dy),
+		}
+		borderDrawer.DrawString(text)
+	}
+
+	// Draw the main text on top
+	drawer.Dot = basePoint
 	drawer.DrawString(text)
+}
+
+// invertColor returns the inverted (complementary) color
+func invertColor(c color.Color) color.Color {
+	r, g, b, a := c.RGBA()
+	// Convert from 16-bit to 8-bit
+	r8, g8, b8, a8 := uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(a>>8)
+	// Invert RGB components
+	return color.RGBA{
+		R: 255 - r8,
+		G: 255 - g8,
+		B: 255 - b8,
+		A: a8,
+	}
 }
 
 // loadFont attempts to load a TrueType font from the system, falls back to basicfont

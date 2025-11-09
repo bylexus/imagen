@@ -21,7 +21,7 @@ by default, imagen just creates a sample 256x192 gray image with a white text on
 - border: The image can also have a border:
   - border width
   - border color
-- image output format: png, jpeg, webp
+- image output format: png, jpeg 
 
 ## Starting / using imagen
 
@@ -55,7 +55,7 @@ the `serve` command starts a web server on port 3000 by default. You can configu
 
 `--listen=[listen address]`: tcp ip/port to listen, e.g. `:3000` to list on all IPs on port 3000, or `192.168.1.20:5555` for a specific IPv4, `[::1]:4567` for an IPv6. Multiple listener addresses can be separated by comma.
 
-## URL format
+## URL scheme
 
 All the above options can be defined as URL parameters. The standard image can just be produced with
 
@@ -64,13 +64,9 @@ All the above options can be defined as URL parameters. The standard image can j
 http://[imagen-url]/
 ```
 
-### url scheme
-
 All parameters can be defined in the URL. The first parameter is always the size of the image,
-while the following parameters can be placed in any order: They are prefixed with a single
+while the following parameters can be placed in any order: They are separated by a slash (`/`), and prefixed with a single
 character to indicate the parameter type:
-
-rough scheme:
 
 ```
 http://[imagen-url]/[size]/[c|g|t|n]:[color-config]:[text-color]/t:[text]/f:[format]/b:[border]
@@ -143,7 +139,14 @@ The `b:size,color`  parameter defines a border around the image, e.g.
 
 `b:5,ff0000` creates a 5 pixel red border.
 
-**Examples:**
+#### Output format
+
+The `f:[format]` parameters defines the image output format. Supported formats are:
+
+- jpg, jpeg
+- png
+
+#### Examples
 
 - Default image: 256x192, black background, white text stating "256x192":
   `http://[imagen-url]/`
@@ -158,6 +161,7 @@ The `b:size,color`  parameter defines a border around the image, e.g.
 - Image size: 500x300, either a solid green color or tiles of blue/white, 10px wide, and a black 10px border. A white text, 30pt, states "Hello, World 500x300". The color mode is chosen randomly:
   `http://[imagen-url]/500x300/c:00ff00/t:white,blue:10/b:10,black/t:"Hello, World {w}x{h},s:30,c:white"`
 
+
 ## Supported color values
 
 the following color values are supported:
@@ -165,6 +169,8 @@ the following color values are supported:
 - RGB hex form, e.g. `ff33a6`, with red = `ff`, green = `33` and blue = `a6`
 - supported HTML color names like `blue`, `darkbrown`, `aliceblue`, as defined by the W3C (<https://www.w3schools.com/colors/colors_names.asp>)
 - the special value `random`, which just returns a random color from the RGB spectrum
+
+
 
 
 ## Software Architecture

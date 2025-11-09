@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(curl:*)",
-      "Bash(md5sum:*)"
+      "Bash(md5sum:*)",
+      "Bash(go build:*)"
     ],
     "deny": [],
     "ask": []
