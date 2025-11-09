@@ -261,6 +261,31 @@ go install ./cmd/imagen
 
 The binary will be available as `imagen` (or `./imagen` if not installed to your PATH).
 
+### Using Docker
+
+You can run imagen in a Docker container without installing Go:
+
+```bash
+# Build the Docker image
+docker build -t imagen .
+
+# Run the web server (accessible at http://localhost:3456)
+docker run -p 3456:3456 imagen
+
+# Or use a custom port mapping
+docker run -p 8080:3456 imagen
+```
+
+The Docker container runs the `serve` command by default on port 3456. You can override the command to use the CLI mode:
+
+```bash
+# Generate images using Docker (mount current directory to save output)
+docker run -v $(pwd):/output imagen ./imagen generate -s 800x600 -c blue -f /output/placeholder.png
+
+# Get help
+docker run imagen ./imagen help
+```
+
 ## Supported image configurations
 
 by default, imagen just creates a sample 256x192 gray image with a white text on it (drawing the actual size). But imagen can produce individualized images. The following parameters are supported:
