@@ -207,16 +207,14 @@ func parseColorConfig(config *generator.ImageConfig, value string) error {
 // parseTextConfig parses text configuration
 // Format: "text",s:[size],c:[color],a:[angle]
 func parseTextConfig(config *generator.ImageConfig, value string) error {
-	// Unquote if quoted
-	value = strings.Trim(value, "\"")
-
-	parts := strings.Split(value, ",")
+	// Split by comma while respecting quotes
+	parts := splitRespectingQuotes(value)
 	if len(parts) == 0 {
 		return fmt.Errorf("empty text config")
 	}
 
-	// First part is the text
-	config.Text = parts[0]
+	// First part is the text (remove quotes if present)
+	config.Text = strings.Trim(parts[0], "\"")
 
 	// Parse remaining parts
 	for _, part := range parts[1:] {
@@ -257,6 +255,37 @@ func parseTextConfig(config *generator.ImageConfig, value string) error {
 	}
 
 	return nil
+}
+
+// splitRespectingQuotes splits a string by commas while respecting quoted sections
+func splitRespectingQuotes(s string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuotes := false
+
+	for i := 0; i < len(s); i++ {
+		char := s[i]
+
+		if char == '"' {
+			inQuotes = !inQuotes
+			current.WriteByte(char)
+		} else if char == ',' && !inQuotes {
+			// Split here
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+		} else {
+			current.WriteByte(char)
+		}
+	}
+
+	// Add the last part
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+
+	return parts
 }
 
 // parseBorderConfig parses border configuration
