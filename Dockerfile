@@ -12,6 +12,9 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Ensure go.sum is up to date with all dependencies
+RUN go mod tidy
+
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o imagen ./cmd/imagen
 
